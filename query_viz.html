@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat&family=Roboto:wght@500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <h1>Visualizing ColBERT Queries</h1>
+    <h3>Query:</h3>
+    <select id="querySel"></select>
+    <div class="visuals">
+      <div>
+        <h3>Top 10 Doc. Tokens Selected by Frequency</h3>
+        <div id="tokenMatching" style="width: 40rem; height: 30rem"></div>
+      </div>
+      <div>
+        <h3>Query Embeddings After PCA, in Fixed Query Space</h3>
+        <div id="scatter" style="width: 40rem; height: 30rem"></div>
+      </div>
+    </div>
+  </body>
+  <script
+    src="https://cdn.plot.ly/plotly-2.25.2.min.js"
+    charset="utf-8"
+  ></script>
+  <script type="module">
+    import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+
+    // Load data
+    var selectedTok = null;
+    const qData = await fetch("./q_data_processed.json").then((response) =>
+      response.json()
+    );
+    for (const i in qData) {
+      const option = document.createElement("option");
+      option.innerHTML = qData[i].query_text;
+      option.value = i;
+      querySel.appendChild(option);
+    }
+    querySel.onchange = (e) => {
+      // Clear previous data
+      scatter.innerHTML = "";
+      tokenMatching.innerHTML = "";
+
+      const specialTokens = ["[CLS]", "[Q]", "[SEP]"];
+      const queryIndex = querySel.value;
+      const queryData = qData[queryIndex];
+      const qToks = queryData.query_tokens;
+
+      const maskIndices = qToks
+        .map((item, i) => [item, i])
+        .filter(([item, i]) => item === "[MASK]")
+        .map(([item, i]) => i);
+      const tokIndices = qToks
+        .map((item, i) => [item, i])
+        .filter(([item, i]) => item[0] !== "[" || item[item.length - 1] !== "]")
+        .map(([item, i]) => i);
+      const specialIndices = qToks
+        .map((item, i) => [item, i])
+        .filter(
+          ([item, i]) =>
+            item[0] === "[" &&
+            item[item.length - 1] === "]" &&
+            item !== "[MASK]"
+        )
+        .map(([item, i]) => i);
+
+      // Display token matching data
+      const tokenMatches = queryData.token_matches;
+      const textSize = 16;
+      const labelMargin = 8;
+      const width = 610;
+
+      const svg = d3
+        .create("svg")
+        .attr("width", width)
+        .attr("height", textSize + (textSize + labelMargin) * 32);
+
+      const tooltip = d3
+        .select(tokenMatching)
+        .append("div")
+        .attr("id", "tooltip")
+        .style("opacity", 0)
+        .style("background-color", "white")
+        .style("border", "solid 1px")
+        .style("padding", "5px")
+        .style("position", "absolute")
+        .style("z-index", 1);
+      const tooltipToken = tooltip.append("p");
+      tooltip.append("p").text("Highest Contributions:");
+      const tooltipContributions = tooltip
+        .append("div")
+				.selectAll("p")
+        .data(["", "", "", "", ""])
+        .enter()
+        .append("p")
+        .text((d) => d);
+
+      for (const [i, qTok] of qToks.entries()) {
+        const color = maskIndices.includes(i)
+          ? "#EA1111"
+          : tokIndices.includes(i)
+          ? "#111111"
+          : "#1111EA";
+
+        const row = svg
+          .append("g")
+          .attr("transform", `translate(0, ${(textSize + labelMargin) * i})`)
+
+          .on("mouseover", (d, i) =>
+            d3.select(d.currentTarget.children[0]).attr("opacity", 1)
+          )
+          .on("mouseout", (d, i) =>
+            d3.select(d.currentTarget.children[0]).attr("opacity", 0)
+          )
+          .on("mousemove", (d, i) => {
+            tooltip
+              .style("left", d3.pointer(d, svg)[0] + 20 + "px")
+              .style("top", d3.pointer(d, svg)[1] - 80 + "px");
+          });
+        row
+          .append("rect")
+          .attr("width", width)
+          .attr("height", textSize + labelMargin)
+          .attr("fill", "#EEEEEE")
+          .attr("opacity", 0);
+        row
+          .append("text")
+          .attr("x", 4)
+          .attr("y", textSize)
+          .attr("font-size", textSize)
+          .attr("fill", "#000000")
+          .text(`${i}:`);
+        row
+          .append("text")
+          .attr("x", 32)
+          .attr("y", textSize)
+          .attr("font-size", textSize)
+          .attr("fill", color)
+          .text(`${qTok}`);
+
+        const docTokens = tokenMatches[i].doc_tokens;
+        const docTokenCounts = tokenMatches[i].doc_token_counts;
+        const docTokenIdxSorted = docTokenCounts
+          .map((t, tIdx) => [t, tIdx])
+          .sort(([t1, _1], [t2, _2]) => t1 - t2)
+          .reverse()
+          .map(([t, tIdx]) => tIdx);
+
+        const barSize = 450;
+        const barStart = 150;
+        row
+          .append("rect")
+          .attr("x", barStart)
+          .attr("y", labelMargin / 2)
+          .attr("width", barSize)
+          .attr("height", textSize)
+          .attr("stroke", "#999999")
+          .attr("fill", "#F6F6F6");
+
+        const total = 1000;
+        let lastPos = barStart;
+        for (let j = 0; j < Math.min(10, docTokens.length); j++) {
+          const pct = docTokenCounts[docTokenIdxSorted[j]] / total;
+          const size = barSize * pct;
+          const bar = row
+            .append("g")
+            .attr("transform", `translate(${lastPos}, 0)`)
+            .on("mouseover", (d, i) => {
+              d3.select(d.currentTarget.children[1]).attr("stroke-width", 2);
+              tooltip.style("opacity", 1);
+              tooltipToken.text(
+                `${docTokens[docTokenIdxSorted[j]]} (${(pct * 100).toFixed(
+                  1
+                )}%)`
+              );
+            })
+            .on("mouseout", (d, i) => {
+              d3.select(d.currentTarget.children[1]).attr("stroke-width", 1);
+              tooltip.style("opacity", 0);
+            });
+          const clipName = `clip-${i}-${j}`;
+          bar
+            .append("clipPath")
+            .attr("id", clipName)
+            .append("rect")
+            .attr("x", 0)
+            .attr("y", labelMargin / 2)
+            .attr("width", size)
+            .attr("height", textSize);
+          bar
+            .append("rect")
+            .attr("x", 0)
+            .attr("y", labelMargin / 2)
+            .attr("width", size)
+            .attr("height", textSize)
+            .attr("stroke", "#000000")
+            .attr("fill", j % 2 === 0 ? "#FAFAFA" : "#EAEAEA");
+          bar
+            .append("text")
+            .attr("x", 4)
+            .attr("y", textSize)
+            .attr("font-size", 12)
+            .attr("fill", "#000000")
+            .attr("clip-path", `url(#${clipName})`)
+            .text(docTokens[docTokenIdxSorted[j]]);
+          lastPos += size;
+        }
+      }
+
+      tokenMatching.append(svg.node());
+
+      // Display query embeddings
+      const points = queryData.scatter_x.map((e, i) => [
+        e,
+        queryData.scatter_y[i],
+        specialTokens.includes(qToks[i])
+          ? "#1111EA"
+          : qToks[i] == "[MASK]"
+          ? "#EA1111"
+          : "#000000",
+        qToks[i],
+      ]);
+
+      const markerSize = 4;
+      const maskName = "[MASK]";
+      const maskData = {
+        x: maskIndices.map((i) => queryData.scatter_x[i]),
+        y: maskIndices.map((i) => queryData.scatter_y[i]),
+        z: maskIndices.map((i) => queryData.scatter_z[i]),
+        mode: "markers+text",
+        name: maskName,
+        text: maskIndices.map((i) => `${i}`),
+        marker: {
+          size: markerSize,
+          color: "rgb(217, 10, 10)",
+          width: 0.5,
+          opacity: 0.8,
+        },
+
+        type: "scatter3d",
+      };
+
+      const tokName = "Query Tokens";
+      const tokData = {
+        x: tokIndices.map((i) => queryData.scatter_x[i]),
+        y: tokIndices.map((i) => queryData.scatter_y[i]),
+        z: tokIndices.map((i) => queryData.scatter_z[i]),
+        mode: "markers+text",
+        name: tokName,
+        text: tokIndices.map((i) => `${i}: ${qToks[i]}`),
+        marker: {
+          size: markerSize,
+          color: "rgb(10, 10, 10)",
+          width: 0.5,
+          opacity: 0.8,
+        },
+        type: "scatter3d",
+      };
+
+      const specialName = "Special Tokens";
+      const specialData = {
+        x: specialIndices.map((i) => queryData.scatter_x[i]),
+        y: specialIndices.map((i) => queryData.scatter_y[i]),
+        z: specialIndices.map((i) => queryData.scatter_z[i]),
+        mode: "markers+text",
+        name: specialName,
+        text: specialIndices.map((i) => `${i}: ${qToks[i]}`),
+        marker: {
+          size: markerSize,
+          color: "rgb(10, 10, 240)",
+          width: 0.5,
+          opacity: 0.8,
+        },
+        type: "scatter3d",
+      };
+      Plotly.newPlot(scatter, [maskData, tokData, specialData], {
+        margin: {
+          l: 0,
+          r: 0,
+          b: 0,
+          t: 0,
+        },
+      });
+      const tokMap = {
+        [specialName]: specialIndices,
+        [maskName]: maskIndices,
+        [tokName]: tokIndices,
+      };
+      scatter
+        .on("plotly_hover", (data) => {
+          const pointNum = data.points[0].pointNumber;
+          const tokCat = data.points[0].data.name;
+          const tokIdx = tokMap[tokCat][pointNum];
+          selectQToken(tokIdx);
+        })
+
+        .on("plotly_unhover", (data) => {
+          unselectQToken();
+        });
+    };
+
+    const selectQToken = (qId) => {
+      if (selectedTok !== null) {
+        tokenMatching.children[1].children[selectedTok].dispatchEvent(
+          new Event("mouseout")
+        );
+      }
+      selectedTok = qId;
+      tokenMatching.children[1].children[selectedTok].dispatchEvent(
+        new Event("mouseover")
+      );
+    };
+
+    const unselectQToken = () => {
+      tokenMatching.children[1].children[selectedTok].dispatchEvent(
+        new Event("mouseout")
+      );
+      selectedTok = null;
+    };
+
+    querySel.onchange();
+  </script>
+  <style>
+    .specialToken {
+      color: #1111ea;
+    }
+
+    .maskToken {
+      color: #ea1111;
+    }
+
+    .visuals {
+      display: flex;
+      flex-direction: row;
+    }
+
+    h1,
+    h2,
+    h3,
+    p,
+    svg {
+      font-family: montserrat, sans-serif;
+    }
+
+    body {
+      padding: 1rem;
+      background-color: #fafafa;
+    }
+  </style>
+</html>

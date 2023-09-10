@@ -14,7 +14,7 @@
     <select id="querySel"></select>
     <div class="visuals">
       <div class="tokenMatchingSpace">
-        <h3>Top 10 Doc. Tokens Selected by Frequency</h3>
+        <h3>Top 100 Doc. Tokens Selected by Max Contribution</h3>
         <p>
           Bar width represents how many times this document token has been
           selected by MaxSim. Hover to examine the surrounding context on match.
@@ -154,12 +154,13 @@
         const docTokens = tokenMatches[i].doc_tokens;
         const docTokenCounts = tokenMatches[i].doc_token_counts;
         const docTokenScores = tokenMatches[i].doc_token_scores;
-        const spans = tokenMatches[i].doc_ctx_spans;
-        const docTokenIdxSorted = docTokenCounts
-          .map((t, tIdx) => [t, tIdx])
+        const docTokenMaxScores = docTokenScores.map((arr) => Math.max(...arr));
+        const docTokenIdxSorted = docTokenMaxScores
+          .map((v, i) => [v, i])
           .sort(([t1, _1], [t2, _2]) => t1 - t2)
           .reverse()
           .map(([t, tIdx]) => tIdx);
+        const spans = tokenMatches[i].doc_ctx_spans;
 
         const barSize = 450;
         const barStart = 150;
@@ -174,7 +175,7 @@
 
         const total = 1000;
         let lastPos = barStart;
-        for (let j = 0; j < Math.min(10, docTokens.length); j++) {
+        for (let j = 0; j < Math.min(100, docTokens.length); j++) {
           const pct = docTokenCounts[docTokenIdxSorted[j]] / total;
           const size = barSize * pct;
           const bar = row
@@ -189,7 +190,7 @@
 
               const scoreIdxs = docTokenScores[docIdx]
                 .map((score, i) => [score, i])
-                .sort(([t1,], [t2,]) => t1 - t2)
+                .sort(([t1], [t2]) => t1 - t2)
                 .reverse()
                 .map(([, i]) => i);
               const spanIds = scoreIdxs.slice(0, 5);
@@ -199,9 +200,9 @@
                 .join("p")
                 .text(
                   (d) =>
-                    `(${docTokenScores[docIdx][d].toFixed(2)}): ${spans[
-                      docIdx
-                    ][d].join(" ")}`
+                    `(${docTokenScores[docIdx][d].toFixed(2)}): ${spans[docIdx][
+                      d
+                    ].join(" ")}`
                 );
             })
             .on("mouseout", (d, i) => {

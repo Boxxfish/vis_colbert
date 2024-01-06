@@ -12,6 +12,7 @@
     <h1>Visualizing ColBERT Queries</h1>
     <h3>Query:</h3>
     <select id="querySel"></select>
+    <p id="loading" class="hide">Loading...</p>
     <div class="visuals">
       <div class="tokenMatchingSpace">
         <h3>Top 100 Doc. Tokens Selected by Max Contribution</h3>
@@ -39,26 +40,33 @@
     import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
     // Load data
+    const loading = document.getElementById("loading");
     var selectedTok = null;
-    const qData = await fetch("./q_data_processed.json").then((response) =>
+    const qIndex = await fetch("./query_index.json").then((response) =>
       response.json()
     );
-    for (const i in qData) {
+    for (const i in qIndex) {
       const option = document.createElement("option");
-      option.innerHTML = qData[i].query_text;
+      option.innerHTML = qIndex[i].query_text;
       option.value = i;
       querySel.appendChild(option);
     }
-    querySel.onchange = (e) => {
+    querySel.onchange = async (e) => {
       // Clear previous data
       scatter.innerHTML = "";
       scatterLocal.innerHTML = "";
       tokenMatching.innerHTML = "";
 
+      loading.className = "";
+
       const specialTokens = ["[CLS]", "[Q]", "[SEP]"];
       const queryIndex = querySel.value;
-      const queryData = qData[queryIndex];
+      const queryData = await fetch(qIndex[queryIndex].data_url).then((response) =>
+        response.json()
+      );
       const qToks = queryData.query_tokens;
+
+      loading.className = "hide";
 
       const maskIndices = qToks
         .map((item, i) => [item, i])
@@ -451,6 +459,10 @@
 
     .tokenMatchingSpace {
       width: 50%;
+    }
+
+    .hide {
+      display: none;
     }
 
     h1,

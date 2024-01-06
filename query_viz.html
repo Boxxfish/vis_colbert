@@ -10,6 +10,77 @@
   </head>
   <body>
     <h1>Visualizing ColBERT Queries</h1>
+    <div class="blurb">
+      <p>
+        ColBERT<sup>1</sup> (short for <b>Co</b>ntextualized <b>L</b>ate
+        Interaction over <b>BERT</b>) is a retrieval model that combines the
+        expressiveness of single vector models (e.g. ANCE<sup>2</sup>) with the
+        fine grained capabilities of lexical models (e.g. TF-IDF<sup>3</sup>).
+        At indexing time, all documents are run through a BERT<sup>4</sup>-like
+        model, producing an embedding for each token in the document. At query
+        time, the query is run through the same model, and the resulting query
+        embeddings are compared against each document embedding through cosine
+        similarity, with the highest similarity for each query embedding summed
+        up over each document to produce that document's score. This scoring
+        operation has been dubbed <i>MaxSim</i>.
+      </p>
+      <p>
+        To structure the text given to the model, the special tokens [CLS],
+        [SEP], [Q], [D], and [MASK] are used. [CLS] and [SEP] are used by the
+        model to indicate the beginning and end of sentences, respectively. [Q]
+        and [D] are used to distinguish queries and documents, since both are
+        encoded with the same model. Finally, [MASK] tokens are used to perform
+        query augmentation, adding weight to query terms, and have been shown to
+        be critical to ColBERT's performance.
+      </p>
+      <p>
+        This demo visualizes ColBERT's scoring mechanism, showing both what each
+        query token tends to match to in the document collection, and the
+        relationship each query embedding has to each other in latent space. We
+        hope it provides users with more intutition as to how ColBERT assigns
+        scores to documents.
+      </p>
+      <p>
+        <small
+          >[1] Omar Khattab and Matei Zaharia. 2020. ColBERT: Efficient and
+          Effective Passage Search via Contextualized Late Interaction over
+          BERT. In Proceedings of the 43rd International ACM SIGIR conference on
+          research and development in Information Retrieval, SIGIR 2020, Virtual
+          Event, China, July 25-30, 2020, ACM, 39–48.
+          DOI:https://doi.org/10.1145/3397271.3401075</small
+        >
+      </p>
+      <p>
+        <small
+          >[2] Lee Xiong, Chenyan Xiong, Ye Li, Kwok-Fung Tang, Jialin Liu, Paul
+          N. Bennett, Junaid Ahmed, and Arnold Overwijk. 2021. Approximate
+          Nearest Neighbor Negative Contrastive Learning for Dense Text
+          Retrieval. In 9th International Conference on Learning
+          Representations, ICLR 2021, Virtual Event, Austria, May 3-7, 2021,
+          OpenReview.net. Retrieved from
+          https://openreview.net/forum?id=zeFrfgyZln</small
+        >
+      </p>
+      <p>
+        <small
+          >[3] Karen Sparck Jones. 1988. A Statistical Interpretation of Term
+          Specificity and Its Application in Retrieval. In Document Retrieval
+          Systems. Taylor Graham Publishing, GBR, 132–142.</small
+        >
+      </p>
+      <p>
+        <small
+          >[4] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova.
+          2019. BERT: Pre-training of Deep Bidirectional Transformers for
+          Language Understanding. In Proceedings of the 2019 Conference of the
+          North American Chapter of the Association for Computational
+          Linguistics: Human Language Technologies, NAACL-HLT 2019, Minneapolis,
+          MN, USA, June 2-7, 2019, Volume 1 (Long and Short Papers), Association
+          for Computational Linguistics, 4171–4186.
+          DOI:https://doi.org/10.18653/V1/N19-1423</small
+        >
+      </p>
+    </div>
     <h3>Query:</h3>
     <select id="querySel"></select>
     <p id="loading" class="hide">Loading...</p>
@@ -468,6 +539,10 @@
       flex-direction: column;
     }
 
+    .blurb {
+      margin: 0 100px;
+    }
+
     @media only screen and (max-width: 1400px) {
       .visuals {
         flex-direction: column;
@@ -484,6 +559,10 @@
 
       .embeddings {
         align-items: center;
+      }
+
+      .blurb {
+        margin: 0 40px;
       }
     }
 
